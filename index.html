@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Provincial Wars</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #222;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    #startScreen, #loadingScreen {
+      text-align: center;
+      position: absolute;
+    }
+
+    #gameCanvas {
+      display: none;
+      border: 2px solid #000;
+      background: #fff;
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+
+    button {
+      font-size: 1.2rem;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+
+    .spinner {
+      border: 6px solid #444;
+      border-top: 6px solid #4CAF50;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    select {
+      font-size: 1.2rem;
+      padding: 10px;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Start Screen -->
+  <div id="startScreen">
+    <h1>Provincial Wars</h1>
+    <button onclick="startGame()">Start Game</button>
+    <div>
+      <label for="aiSelect">Number of AI Players: </label>
+      <select id="aiSelect">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="loadingScreen" style="display: none;">
+    <div class="spinner"></div>
+    <p>Loading Provincial Wars...</p>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas" width="900" height="800"></canvas>
+
+  <div id="hud" style="display: none; margin-top: 10px;">
+    <p>Resources: <span id="playerResources">0</span></p>
+    <button onclick="expandTerritory()">Expand</button>
+  </div>
+  
+  <script>
+    function startGame() {
+      const aiCount = parseInt(document.getElementById('aiSelect').value); // Get AI count from dropdown
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('loadingScreen').style.display = 'block';
+  
+      setTimeout(() => {
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('gameCanvas').style.display = 'block';
+        runGame(aiCount); // Pass AI count to the game logic
+      }, 2000);
+    }
+  
+    function runGame(aiCount) {
+
+      // A* Algorithm Implementation for Pathfinding
+function aStarPathfinding(startX, startY, targetX, targetY) {
+  const openList = [];
+  const closedList = new Set();
+  
+  const getCost = (x, y) => {
+    if (x < 0 || y < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) return Infinity;
+    const key = `${x},${y}`;
+    if (waterTiles.has(key) || occupiedTiles.has(key)) return Infinity;
+    return 1; // Normal terrain cost (moveable tiles)
+  };
+  
+  const heuristic = (x, y, tx, ty) => {
+    return Math.abs(x - tx) + Math.abs(y - ty); // Manhattan distance heuristic
+  };
+  
+  class Node {
+    constructor(x, y, g, h, parent) {
+      this.x = x;
+      this.y = y;
+      this.g = g;  // Cost from start to current
+      this.h = h;  // Heuristic cost to target
+      this.f = g + h;  // Total cost
+      this.parent = parent; // Parent node for path reconstruction
+    }
+  }
+  
+  const startNode = new Node(startX, startY, 0, heuristic(startX, startY, targetX, targetY), null);
+  openList.push(startNode);
+  
+  const visited = new Set();
+  
+  while (openList.length > 0) {
+    // Sort by f-cost (lowest f-cost first)
+    openList.sort((a, b) => a.f - b.f);
+    const currentNode = openList.shift();
+    
+    if (currentNode.x === targetX && currentNode.y === targetY) {
+      // Reached the target, reconstruct path
+      const path = [];
+      let node = currentNode;
+      while (node) {
+        path.unshift({ x: node.x, y: node.y });
+        node = node.parent;
+      }
+      return path;
+    }
+    
+    closedList.add(`${currentNode.x},${currentNode.y}`);
+    
+    // Check neighbors (4 directions)
+    const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (const [dx, dy] of directions) {
+      const nx = currentNode.x + dx;
+      const ny = currentNode.y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (closedList.has(key)) continue;
+      
+      const gCost = currentNode.g + getCost(nx, ny);
+      const hCost = heuristic(nx, ny, targetX, targetY);
+      
+      if (visited.has(key) && gCost >= visited.get(key)) continue;
+      
+      visited.add(key, gCost);
+      
+      const neighborNode = new Node(nx, ny, gCost, hCost, currentNode);
+      openList.push(neighborNode);
+    }
+  }
+  
+  return []; // No path found
+}
+
+// Integrating pathfinding into the expansion logic
+function expandTerritoryFor(owner, resources) {
+  const expansionSize = Math.min(10, Math.floor(resources / 5));
+  if (expansionSize <= 0) return 0;
+
+  let expanded = 0;
+  const newTiles = [];
+  
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      if (grid[y][x] === owner) {
+        const neighbors = [
+          [x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]
+        ];
+
+        for (let [nx, ny] of neighbors) {
+          if (nx >= 0 && ny >= 0 && nx < GRID_WIDTH && ny < GRID_HEIGHT && grid[ny][nx] === null && !waterTiles.has(`${nx},${ny}`)) {
+            const path = aStarPathfinding(x, y, nx, ny);
+            if (path.length > 0) {
+              newTiles.push({ x: nx, y: ny });
+              expanded++;
+            }
+          }
+          if (expanded >= expansionSize) break;
+        }
+      }
+      if (expanded >= expansionSize) break;
+    }
+    if (expanded >= expansionSize) break;
+  }
+
+  for (const { x, y } of newTiles) {
+    grid[y][x] = owner;
+    occupiedTiles.add(`${x},${y}`);
+  }
+
+  return expanded;
+}
+
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+  
+      const CELL_SIZE = 8;
+      const GRID_WIDTH = Math.floor(canvas.width / CELL_SIZE);
+      const GRID_HEIGHT = Math.floor(canvas.height / CELL_SIZE);
+  
+      const PLAYER_COLOR = 'blue';
+      const AI_COLORS = ['red', 'green', 'orange', 'purple', 'cyan', 'pink']; // More if needed
+      const WATER_COLOR = '#60A5FA';
+  
+      let grid = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(null));
+      let waterTiles = new Set();
+      let occupiedTiles = new Set();
+  
+      const territorySize = 10;
+      const bufferZone = 2;
+  
+      let territoryTroops = {}; // Object to store troops for each territory
+  
+      // Place water tiles randomly
+      const waterCount = Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.1);
+      while (waterTiles.size < waterCount) {
+        const x = Math.floor(Math.random() * GRID_WIDTH);
+        const y = Math.floor(Math.random() * GRID_HEIGHT);
+        const key = `${x},${y}`;
+        if (!waterTiles.has(key)) {
+          waterTiles.add(key);
+          occupiedTiles.add(key);
+          grid[y][x] = 'water';
+        }
+      }
+  
+      function isTerritoryOccupied(x, y, size) {
+        for (let dy = -bufferZone; dy < size + bufferZone; dy++) {
+          for (let dx = -bufferZone; dx < size + bufferZone; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const key = `${nx},${ny}`;
+            if (
+              nx < 0 || ny < 0 || // Check out-of-bounds
+              nx >= GRID_WIDTH || ny >= GRID_HEIGHT ||
+              occupiedTiles.has(key) || // Already occupied
+              waterTiles.has(key) // Avoid water tiles
+            ) {
+              return true;
+            }
+          }
+        }
+        return false; // Safe placement
+      }
+  
+      function generateSquareTerritory(x, y, size, owner) {
+        const territory = [];
+        for (let dy = -bufferZone; dy < size + bufferZone; dy++) {
+          for (let dx = -bufferZone; dx < size + bufferZone; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const key = `${nx},${ny}`;
+  
+            // Ensure all buffer zones are marked as occupied
+            if (nx >= 0 && ny >= 0 && nx < GRID_WIDTH && ny < GRID_HEIGHT) {
+              occupiedTiles.add(key);
+  
+              // Assign tiles to the owner only within the actual territory
+              if (dx >= 0 && dx < size && dy >= 0 && dy < size && !waterTiles.has(key)) {
+                grid[ny][nx] = owner;
+                territory.push({ x: nx, y: ny });
+              }
+            }
+          }
+        }
+        territoryTroops[owner] = territory.length * 5; // Assign troops (5 troops per tile)
+        return territory;
+      }
+  
+
+  
+      // Place Player
+      let playerX, playerY;
+      let attempts = 0;
+      do {
+        playerX = Math.floor(Math.random() * (GRID_WIDTH - territorySize));
+        playerY = Math.floor(Math.random() * (GRID_HEIGHT - territorySize));
+        attempts++;
+        if (attempts > 1000) break;
+      } while (isTerritoryOccupied(playerX, playerY, territorySize));
+      generateSquareTerritory(playerX, playerY, territorySize, 'player');
+  
+      // Place AIs
+      for (let i = 0; i < aiCount; i++) {
+        let aiX, aiY;
+        let tries = 0;
+        do {
+          aiX = Math.floor(Math.random() * (GRID_WIDTH - territorySize));
+          aiY = Math.floor(Math.random() * (GRID_HEIGHT - territorySize));
+          tries++;
+          if (tries > 1000) break;
+        } while (isTerritoryOccupied(aiX, aiY, territorySize));
+        generateSquareTerritory(aiX, aiY, territorySize, `ai${i + 1}`);
+      }
+  
+      function drawGrid() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+          for (let x = 0; x < GRID_WIDTH; x++) {
+            const tile = grid[y][x];
+            if (tile === 'player') {
+              ctx.fillStyle = PLAYER_COLOR;
+            } else if (tile && tile.startsWith('ai')) {
+              const aiIndex = parseInt(tile.replace('ai', '')) - 1;
+              ctx.fillStyle = AI_COLORS[aiIndex % AI_COLORS.length];
+            } else if (tile === 'water') {
+              ctx.fillStyle = WATER_COLOR;
+            } else {
+              ctx.fillStyle = 'white';
+            }
+            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            ctx.strokeStyle = '#ccc';
+            ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          }
+        }
+      }
+  
+      function combat(x, y, owner, enemy) {
+        if (territoryTroops[owner] > territoryTroops[enemy]) {
+          // Winner gets the territory
+          territoryTroops[owner] -= territoryTroops[enemy];
+          territoryTroops[enemy] = 0; // All enemy troops are defeated
+          grid[y][x] = owner; // Mark the territory as taken
+        } else {
+          territoryTroops[enemy] -= territoryTroops[owner];
+          territoryTroops[owner] = 0;
+          grid[y][x] = enemy;
+        }
+      }
+  
+      function gameLoop() {
+        drawGrid();
+        requestAnimationFrame(gameLoop);
+      }
+  
+      gameLoop();
+      let playerResources = 60;
+      let aiResources = Array(aiCount).fill(1000); // Starting AI resources
+  
+      document.getElementById('hud').style.display = 'block';
+      document.getElementById('playerResources').textContent = playerResources;
+  
+      function expandTerritoryFor(owner, resources) {
+        // Increased expansion size to allow for more tiles
+        const expansionSize = Math.min(10, Math.floor(resources / 5)); // More tiles can be expanded now
+        if (expansionSize <= 0) return 0;
+  
+        let expanded = 0;
+        const newTiles = [];
+  
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+          for (let x = 0; x < GRID_WIDTH; x++) {
+            if (grid[y][x] === owner) {
+              const directions = [
+                [0, -1], [1, 0], [0, 1], [-1, 0]
+              ];
+  
+              for (let [dx, dy] of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                const key = `${nx},${ny}`;
+  
+                if (
+                  nx >= 0 && ny >= 0 && nx < GRID_WIDTH && ny < GRID_HEIGHT &&
+                  grid[ny][nx] === null && !waterTiles.has(key)
+                ) {
+                  newTiles.push({ x: nx, y: ny });
+                  expanded++;
+                  if (expanded >= expansionSize) break;
+                }
+              }
+            }
+            if (expanded >= expansionSize) break;
+          }
+          if (expanded >= expansionSize) break;
+        }
+  
+        for (const { x, y } of newTiles) {
+          grid[y][x] = owner;
+          occupiedTiles.add(`${x},${y}`);
+        }
+  
+        return expanded;
+      }
+  
+      // The new expandTerritory() function triggered by the button
+      function expandTerritory() {
+        if (playerResources >= 5) {
+          const gained = expandTerritoryFor('player', playerResources);
+          playerResources -= gained * 1;
+          document.getElementById('playerResources').textContent = playerResources;
+        }
+      }
+  
+      // Event listener for the expand button
+      document.querySelector('button[onclick="expandTerritory()"]').addEventListener('click', expandTerritory);
+  
+      setInterval(() => {
+        for (let i = 0; i < aiCount; i++) {
+          const gained = expandTerritoryFor(`ai${i + 1}`, aiResources[i]);
+          aiResources[i] -= gained * 4; // Makes AI expand slower
+        }
+      }, 2000); // AI tries to expand every 2 seconds
+  
+      setInterval(() => {
+        playerResources += 10;
+        for (let i = 0; i < aiResources.length; i++) {
+          aiResources[i] += 5;
+        }
+        document.getElementById('playerResources').textContent = playerResources;
+      }, 1000); // Generate 1 resource per second
+    }
+  </script>
+</body>
+</html>
