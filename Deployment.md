@@ -28,3 +28,7 @@ provincial-wars/
 ├── index.html        # Main game file with embedded CSS and JS
 └── README.md         # Optional: add gameplay instructions or credits
 Currently, all logic and styles are embedded inside index.html.
+
+INSTRUCTIONS
+
+Type https://kprmodi.github.io/provincial-wars/ in browser to play game
